@@ -70,9 +70,12 @@ sub updateFile {
         my $file=shift @_;
         my $currentversion=shift @_;
         my $old=0;
+        my $downloadfull=0;
 
         if  ( ! -e "$clamdb/$file.cvd" ) {
                 warn "file $file.cvd does not exist, skipping cdiffs\n";
+                # mark that we want to download a new full version
+                $downloadfull=1;
         } elsif  ( ! -z "$clamdb/$file.cvd" ) {
                 $old = getSigVersion("$clamdb/$file.cvd");
                 if ( $old > 0) {
@@ -80,8 +83,10 @@ sub updateFile {
                             print "$file old: $old current: $currentversion\n";
                             # mirror all the diffs
                             for (my $count = $old + 1 ; $count <= $currentversion; $count++) {
-                                system("wget -q -nH -nd -N -nv $mirror/$file-$count.cdiff");
+                                system("wget --no-cache -q -nH -nd -N -nv $mirror/$file-$count.cdiff");
                             }
+                            # mark that we want to download a new full version
+                            $downloadfull=1;
                         } else {
                             warn "file $file.cvd version up to date\n";
                             return;
@@ -91,29 +96,33 @@ sub updateFile {
                 }
         } else {
                 warn "file $file.cvd is zero, skipping cdiffs\n";
+                # mark that we want to download a new full version
+                $downloadfull=1;
         }
-
-        # update the full file using a copy, then move back
-        if (-e "$clamdb/$file.cvd" ) {
-          copy("$clamdb/$file.cvd","$clamdb/temp/$file.cvd");
-          #system("cp -a $clamdb/$file.cvd $clamdb/temp/$file.cvd");
-        }
-        system("cd $clamdb/temp;wget -q -nH -nd -N -nv $mirror/$file.cvd");
-        if  ( -e "$clamdb/temp/$file.cvd" && ! -z "$clamdb/temp/$file.cvd" ) {
-                if ( ! -e "$clamdb/$file.cvd") {
-                        print "File temp/$file.cvd exists but not $file.cvd, moving temp/$file.cvd to $file.cvd\n";
-                        move("$clamdb/temp/$file.cvd","$clamdb/$file.cvd");
-                } elsif ( getSigVersion("$clamdb/temp/$file.cvd") > getSigVersion("$clamdb/$file.cvd") ) {
-                        print "File temp/$file.cvd is newer than $file.cvd, replacing $file.cvd with temp/$file.cvd\n";
-                        move("$clamdb/temp/$file.cvd","$clamdb/$file.cvd");
+        
+        if ($downloadfull) {
+                # update the full file using a copy, then move back
+                if (-e "$clamdb/$file.cvd" ) {
+                        copy("$clamdb/$file.cvd","$clamdb/temp/$file.cvd");
+                        #system("cp -a $clamdb/$file.cvd $clamdb/temp/$file.cvd");
+                }
+                system("cd $clamdb/temp;wget --no-cache -q -nH -nd -N -nv $mirror/$file.cvd");
+                if  ( -e "$clamdb/temp/$file.cvd" && ! -z "$clamdb/temp/$file.cvd" ) {
+                        if ( ! -e "$clamdb/$file.cvd") {
+                                print "File temp/$file.cvd exists but not $file.cvd, moving temp/$file.cvd to $file.cvd\n";
+                                move("$clamdb/temp/$file.cvd","$clamdb/$file.cvd");
+                        } elsif ( getSigVersion("$clamdb/temp/$file.cvd") > getSigVersion("$clamdb/$file.cvd") ) {
+                                print "File temp/$file.cvd is newer than $file.cvd, replacing $file.cvd with temp/$file.cvd\n";
+                                move("$clamdb/temp/$file.cvd","$clamdb/$file.cvd");
+                        } else {
+                                print "Not using file temp/$file.cvd\n";
+                                #unlink("$clamdb/temp/$file.cvd");
+                        }
                 } else {
-                        print "Not using file temp/$file.cvd\n";
+                        warn "File temp/$file.cvd is not valid, not copying back !\n";
                         unlink("$clamdb/temp/$file.cvd");
                 }
-        } else {
-                warn "File temp/$file.cvd is not valid, not copying back !\n";
-                unlink("$clamdb/temp/$file.cvd");
+                system("chmod 644 $clamdb/*.cvd $clamdb/*.cdiff" );
         }
-        system("chmod 644 $clamdb/*.cvd $clamdb/*.cdiff" );
 }
 __END__
