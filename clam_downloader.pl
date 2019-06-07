@@ -116,7 +116,7 @@ sub updateFile {
                                 move("$clamdb/temp/$file.cvd","$clamdb/$file.cvd");
                         } else {
                                 print "Not using file temp/$file.cvd\n";
-                                #unlink("$clamdb/temp/$file.cvd");
+                                unlink("$clamdb/temp/$file.cvd");
                         }
                 } else {
                         warn "File temp/$file.cvd is not valid, not copying back !\n";
