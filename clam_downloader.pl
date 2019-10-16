@@ -59,17 +59,24 @@ sub getSigVersion {
         my $file=shift @_;
         my $cmd="sigtool -i $file";
         open P, "$cmd |" || die("Can't run $cmd : $!");
+        my $version=-1;
         while (<P>) {
-                next unless /Version: (\d+)/;
-                return $1;
+                if (/Version: (\d+)/) {
+                    $version=$1;
+                }
+                if (/^ERROR:/) {
+                    $version=-1;
+                    last;
+                }
         }
         close(P);
-        return -1;
+        return $version;
 }
+
 sub updateFile {
         my $file=shift @_;
-        my $currentversion=shift @_;
-        my $old=0;
+        my $latestversion=shift @_;
+        my $currentversion=0;
         my $downloadfull=0;
 
         if  ( ! -e "$clamdb/$file.cvd" ) {
@@ -77,12 +84,12 @@ sub updateFile {
                 # mark that we want to download a new full version
                 $downloadfull=1;
         } elsif  ( ! -z "$clamdb/$file.cvd" ) {
-                $old = getSigVersion("$clamdb/$file.cvd");
-                if ( $old > 0) {
-                        if ($old<$currentversion) {
-                            print "$file old: $old current: $currentversion\n";
+                $currentversion = getSigVersion("$clamdb/$file.cvd");
+                if ( $currentversion > 0) {
+                        if ($currentversion<$latestversion) {
+                            print "$file current: $currentversion latest: $latestversion\n";
                             # mirror all the diffs
-                            for (my $count = $old + 1 ; $count <= $currentversion; $count++) {
+                            for (my $count = $currentversion + 1 ; $count <= $latestversion; $count++) {
                                 system("wget --no-cache -q -nH -nd -N -nv $mirror/$file-$count.cdiff");
                             }
                             # mark that we want to download a new full version
@@ -99,12 +106,11 @@ sub updateFile {
                 # mark that we want to download a new full version
                 $downloadfull=1;
         }
-        
+
         if ($downloadfull) {
                 # update the full file using a copy, then move back
                 if (-e "$clamdb/$file.cvd" ) {
                         copy("$clamdb/$file.cvd","$clamdb/temp/$file.cvd");
-                        #system("cp -a $clamdb/$file.cvd $clamdb/temp/$file.cvd");
                 }
                 system("cd $clamdb/temp;wget --no-cache -q -nH -nd -N -nv $mirror/$file.cvd");
                 if  ( -e "$clamdb/temp/$file.cvd" && ! -z "$clamdb/temp/$file.cvd" ) {
@@ -115,14 +121,17 @@ sub updateFile {
                                 print "File temp/$file.cvd is newer than $file.cvd, replacing $file.cvd with temp/$file.cvd\n";
                                 move("$clamdb/temp/$file.cvd","$clamdb/$file.cvd");
                         } else {
-                                print "Not using file temp/$file.cvd\n";
-                                unlink("$clamdb/temp/$file.cvd");
+                                print "Not using file temp/$file.cvd (not newer or invalid)\n";
+                                #unlink("$clamdb/temp/$file.cvd");
                         }
-                } else {
-                        warn "File temp/$file.cvd is not valid, not copying back !\n";
+                } elsif ( -e "$clamdb/temp/$file.cvd") {
+                        warn "File temp/$file.cvd is empty, not copying back !\n";
                         unlink("$clamdb/temp/$file.cvd");
+                } elsif ( ! -e "$clamdb/temp/$file.cvd") {
+                        warn "File temp/$file.cvd does not exist, did we fail to download signatures?\n";
                 }
                 system("chmod 644 $clamdb/*.cvd $clamdb/*.cdiff" );
         }
 }
 __END__
+
