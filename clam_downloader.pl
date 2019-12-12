@@ -10,6 +10,12 @@ use warnings;
 use Net::DNS;
 use File::Copy;
 
+# if you want to use a proxy, use this
+# BEGIN {
+#   $ENV{'https_proxy'} = 'http://127.0.0.1:3128';
+#   $ENV{'http_proxy'} = 'http://127.0.0.1:3128';
+#}
+
 # full path to clamd basedir
 my $clamdb="/var/www/html/";
 if (! -d $clamdb) {
@@ -110,9 +116,10 @@ sub updateFile {
         if ($downloadfull) {
                 # update the full file using a copy, then move back
                 if (-e "$clamdb/$file.cvd" ) {
-                        copy("$clamdb/$file.cvd","$clamdb/temp/$file.cvd");
+                        unlink("$clamdb/temp/$file.cvd");
+                        system("cp -p $clamdb/$file.cvd $clamdb/temp/$file.cvd");
                 }
-                system("cd $clamdb/temp;wget --no-cache -q -nH -nd -N -nv $mirror/$file.cvd");
+                system("cd $clamdb/temp;wget --no-check-certificate --no-cache -q -nH -nd -N -nv $mirror/$file.cvd");
                 if  ( -e "$clamdb/temp/$file.cvd" && ! -z "$clamdb/temp/$file.cvd" ) {
                         if ( ! -e "$clamdb/$file.cvd") {
                                 print "File temp/$file.cvd exists but not $file.cvd, moving temp/$file.cvd to $file.cvd\n";
